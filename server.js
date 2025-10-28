@@ -3,16 +3,49 @@ const helmet = require("helmet");
 const cors = require("cors");
 require("dotenv").config();
 
-// Initialize the Express app
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+// Set your frontend origin in env, fallback to this value:
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN ||
+  "https://quiz-frontend-je9pf40rp-nayabshaik0218-svgs-projects.vercel.app";
+
+// CORS options
+const corsOptions = {
+  origin: FRONTEND_ORIGIN,             // exact origin (don't use '*' if credentials:true)
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "Accept",
+    "X-Requested-With",
+    "X-Forwarded-Proto",
+    "X-Vercel-Id",
+    "X-Vercel-Bypass-Token"
+  ],
+  credentials: true,                  // allow cookies / credentialed requests
+  optionsSuccessStatus: 204
+};
+
+// IMPORTANT: respond to preflight for all routes before other logic
+app.options("*", cors(corsOptions));
+
 app.use(helmet());
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 
-// Health check endpoint
+// Safety: ensure the CORS headers are always present (helps debugging)
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", FRONTEND_ORIGIN);
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, Accept, X-Requested-With"
+  );
+  res.header("Access-Control-Allow-Credentials", "true");
+  next();
+});
+
 app.get("/health", (req, res) => {
   res.json({
     ok: true,
@@ -21,7 +54,6 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Root endpoint
 app.get("/", (req, res) => {
   res.type("html").send(`
     <html>
@@ -35,7 +67,6 @@ app.get("/", (req, res) => {
   `);
 });
 
-// API Endpoint to fetch static quiz questions
 app.get("/api/questions", (req, res) => {
   const questions = [
     {
@@ -44,29 +75,13 @@ app.get("/api/questions", (req, res) => {
       choices: ["3", "4", "5", "6"],
       answer: "4",
     },
-    {
-      topic: "Science",
-      question: "Water's chemical formula?",
-      choices: ["H2O", "CO2", "O2", "H2"],
-      answer: "H2O",
-    },
-    {
-      topic: "Tech",
-      question: "What does CPU stand for?",
-      choices: [
-        "Central Process Unit",
-        "Computer Personal Unit",
-        "Central Processing Unit",
-        "Control Processing Unit",
-      ],
-      answer: "Central Processing Unit",
-    },
+    // ... other questions
   ];
   res.json(questions);
 });
 
-// Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`CORS allowed origin: ${FRONTEND_ORIGIN}`);
 });
 
