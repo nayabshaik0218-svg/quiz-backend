@@ -7,28 +7,38 @@ require("dotenv").config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Default allowed origins (you can add more here)
+// Allowed frontend origins (env override via FRONTEND_ORIGINS comma-separated)
 const DEFAULT_ORIGINS = [
   "https://quiz-frontend-je9pf40rp-nayabshaik0218-svgs-projects.vercel.app",
   "https://quiz-frontend-amber-nu.vercel.app",
   "https://quiz-frontend-owct8ed66-nayabshaik0218-svgs-projects.vercel.app"
 ];
-
-// Allow overriding with env (comma separated)
 const FRONTEND_ORIGINS = process.env.FRONTEND_ORIGINS
   ? process.env.FRONTEND_ORIGINS.split(",").map(s => s.trim()).filter(Boolean)
   : DEFAULT_ORIGINS;
 
 console.log("Allowed frontend origins:", FRONTEND_ORIGINS);
 
+// Questions array (from your JSON)
+const QUESTIONS = [
+  {"topic":"Math","question":"What is 2 + 2?","choices":["3","4","5","6"],"answer":"4"},
+  {"topic":"Science","question":"What gas do plants absorb from the atmosphere?","choices":["Oxygen","Nitrogen","Carbon Dioxide","Hydrogen"],"answer":"Carbon Dioxide"},
+  {"topic":"Geography","question":"What is the capital of France?","choices":["Berlin","Madrid","Paris","Rome"],"answer":"Paris"},
+  {"topic":"History","question":"Who was the first President of the United States?","choices":["Abraham Lincoln","George Washington","Thomas Jefferson","John Adams"],"answer":"George Washington"},
+  {"topic":"Technology","question":"What does CPU stand for?","choices":["Central Process Unit","Computer Personal Unit","Central Processing Unit","Control Processing Unit"],"answer":"Central Processing Unit"},
+  {"topic":"Sports","question":"Which sport is known as the ‘king of sports’?","choices":["Basketball","Cricket","Soccer","Tennis"],"answer":"Soccer"},
+  {"topic":"Literature","question":"Who wrote 'Romeo and Juliet'?","choices":["William Shakespeare","Charles Dickens","Mark Twain","Jane Austen"],"answer":"William Shakespeare"},
+  {"topic":"Music","question":"Which instrument has keys, pedals, and strings?","choices":["Piano","Guitar","Violin","Saxophone"],"answer":"Piano"},
+  {"topic":"Science","question":"What is the boiling point of water at sea level in Celsius?","choices":["100°C","90°C","80°C","110°C"],"answer":"100°C"},
+  {"topic":"Math","question":"What is the square root of 64?","choices":["6","7","8","9"],"answer":"8"}
+];
+
 const corsOptions = {
   origin: function (origin, callback) {
-    // If no origin (curl, server-side) allow it
     if (!origin) return callback(null, true);
     if (FRONTEND_ORIGINS.indexOf(origin) !== -1) {
       return callback(null, true);
     }
-    // Not allowed
     return callback(new Error("Not allowed by CORS"), false);
   },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -45,77 +55,41 @@ const corsOptions = {
   optionsSuccessStatus: 204
 };
 
-// Respond to preflight early
 app.options("*", cors(corsOptions));
-
-// Security middlewares
 app.use(helmet());
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// Helpful debug headers + ensure CORS headers always exist on responses
+// Debug headers & logs
 app.use((req, res, next) => {
   const origin = req.get("Origin") || req.get("origin");
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} - Origin: ${origin || "none"}`);
-
-  // If origin is allowed, explicitly echo it back (required when credentials: true)
   if (origin && FRONTEND_ORIGINS.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
   }
-
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, Accept, X-Requested-With, X-Vercel-Id, X-Vercel-Bypass-Token"
-  );
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, X-Requested-With, X-Vercel-Id, X-Vercel-Bypass-Token");
   res.setHeader("Access-Control-Allow-Credentials", "true");
   next();
 });
 
-// Basic health route
 app.get("/health", (req, res) => {
-  res.json({
-    ok: true,
-    server: "quiz-backend",
-    project: process.env.PROJECT_ID || "unknown",
-  });
+  res.json({ ok: true, server: "quiz-backend", project: process.env.PROJECT_ID || "unknown" });
 });
 
 app.get("/", (req, res) => {
-  res.type("html").send(`
-    <html>
-      <head><title>Quiz App Backend</title></head>
-      <body style="font-family:system-ui,Arial;padding:2rem;">
-        <h1>Quiz App Backend</h1>
-        <p>Health: <a href="/health">/health</a></p>
-        <p>Questions endpoint (GET): <code>/api/questions</code></p>
-      </body>
-    </html>
-  `);
+  res.type("html").send(`<h1>Quiz App Backend</h1><p>GET /api/questions</p>`);
 });
 
-// Example API
+// Serve questions
 app.get("/api/questions", (req, res) => {
-  // NOTE: If Vercel Protection / SSO is enabled for this deployment,
-  // the request may be intercepted before this handler runs.
-  const questions = [
-    {
-      topic: "Math",
-      question: "What is 2 + 2?",
-      choices: ["3", "4", "5", "6"],
-      answer: "4",
-    },
-    // add more questions as needed
-  ];
-  res.json(questions);
+  // If Vercel Deployment Protection is enabled, Vercel may intercept requests
+  // and return the SSO page before this handler runs (401). See notes below.
+  res.json(QUESTIONS);
 });
 
-// Optional: expose a small endpoint that Vercel's default page sometimes polls
-// (not required, but helpful if you saw client code fetching it)
-app.get("/.well-known/vercel-user-meta", (req, res) => {
-  // Return 404 if not set by Vercel. This just avoids noisy errors in some setups.
-  res.status(404).send("not-found");
-});
+// small helper commonly probed by Vercel auth UI
+app.get("/.well-known/vercel-user-meta", (req, res) => res.status(404).send("not-found"));
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
