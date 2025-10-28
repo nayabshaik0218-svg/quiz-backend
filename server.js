@@ -55,7 +55,7 @@ const corsOptions = {
   optionsSuccessStatus: 204
 };
 
-app.options("*", cors(corsOptions));
+app.options("/*", cors(corsOptions));
 app.use(helmet());
 app.use(cors(corsOptions));
 app.use(express.json());
