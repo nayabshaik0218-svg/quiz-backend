@@ -1,10 +1,10 @@
 export default function handler(req, res) {
-  // Add CORS headers to allow requests from frontend
+  // Add these headers for CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Handle preflight OPTIONS request
+  // Handle OPTIONS method for CORS preflight
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -78,4 +78,3 @@ export default function handler(req, res) {
     },
   ]);
 }
-
