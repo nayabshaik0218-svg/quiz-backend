@@ -1,0 +1,128 @@
+const express = require("express");
+const helmet = require("helmet");
+const cors = require("cors");
+const axios = require("axios");
+require("dotenv").config();
+
+// Initialize the Express app
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+// --- quick root & health endpoints (added manually) ---
+app.get("/health", (req, res) => {
+  res.json({ ok: true, server: "quiz-backend", project: process.env.PROJECT_ID || null });
+});
+
+app.get("/", (req, res) => {
+  res.type("html").send(`
+    <html>
+      <head><title>Quiz App Backend</title></head>
+      <body style="font-family:system-ui,Arial;padding:2rem;">
+        <h1>Quiz App Backend</h1>
+        <p>Health: <a href="/health">/health</a></p>
+        <p>Questions endpoint (GET): <code>/api/questions</code></p>
+      </body>
+    </html>
+  `);
+});
+// --- end root & health ---
+
+// API Endpoint to Fetch Questions
+app.get("/api/questions", async (req, res) => {
+    try {
+        // --- START FIX for 401 Error ---
+        // Use the correct Generative AI API endpoint and pass the key as a query parameter
+        const modelName = "gemini-2.5-flash"; // Recommended model for speed and efficiency
+        const url = `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${process.env.GOOGLE_API_KEY}`;
+        
+        // Use the correct Generative AI API request body structure
+        const requestBody = {
+            contents: [
+                {
+                    role: "user",
+                    parts: [
+                        {
+                            // Prompt with strict JSON formatting instructions
+                            text: `Generate 10 multiple-choice questions with four options on topics Science, History, and Pop Culture. The questions MUST be returned as a single JSON array, with each object having the keys: "question", "choices" (an array of strings), "answer", and "topic".`,
+                        },
+                    ],
+                },
+            ],
+            // Use generationConfig instead of 'parameters'
+            generationConfig: {
+                temperature: 0.7,
+                topP: 0.8,
+                // Request a JSON response and provide a schema for best results
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            question: { type: "string" },
+                            choices: { type: "array", items: { type: "string" } },
+                            answer: { type: "string" },
+                            topic: { type: "string" },
+                        },
+                        required: ["question", "choices", "answer", "topic"],
+                    },
+                },
+            },
+        };
+
+        const response = await axios.post(url, requestBody, {
+            headers: {
+                "Content-Type": "application/json",
+                // Remove the 'Authorization: Bearer ...' header as the key is in the URL
+            },
+        });
+        
+        // Extract the generated content from the correct response path
+        const generatedText = response.data.candidates[0].content.parts[0].text;
+        // --- END FIX for 401 Error ---
+
+        let questions;
+        try {
+            questions = JSON.parse(generatedText);
+        } catch (e) {
+            console.error("Failed to parse JSON:", e.message);
+            throw new Error("Failed to parse questions JSON from API response.");
+        }
+
+        // Ensure the parsed result is an array before sending
+        if (!Array.isArray(questions)) {
+            throw new Error("API response was not a JSON array.");
+        }
+
+        res.json(questions);
+
+    } catch (error) {
+        console.error("Google Gemini API error:", error.message);
+        
+        // Send a fallback array on failure
+        res.status(500).json([
+            {
+                question: "Fallback: Which planet is known as the Red Planet?",
+                choices: ["Earth", "Mars", "Jupiter", "Venus"],
+                answer: "Mars",
+                topic: "Science"
+            },
+            {
+                question: "Fallback: Who wrote 'Romeo and Juliet'?",
+                choices: ["Charles Dickens", "William Shakespeare", "Jane Austen", "Mark Twain"],
+                answer: "William Shakespeare",
+                topic: "History"
+            }
+        ]);
+    }
+});
+
+
+// Start the server
+app.listen(PORT, () => {
+    console.log(`Server listening on http://localhost:${PORT}`);
+});
